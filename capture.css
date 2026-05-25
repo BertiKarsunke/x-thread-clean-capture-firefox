@@ -9,13 +9,12 @@ button:hover { background: linear-gradient(180deg, #3b82f6, #2563eb); }
 #status { color: #93a4bd; font-size: 13px; }
 #capture { box-sizing: border-box; width: 760px; margin: 0 auto; padding: 36px; border: 1px solid rgba(148,163,184,.18); border-radius: 14px; background: #0b1020; box-shadow: 0 24px 70px rgba(0,0,0,.42); overflow: hidden; }
 .header { padding-bottom: 18px; margin-bottom: 22px; border-bottom: 1px solid rgba(148,163,184,.18); }
-.title { color: #f8fafc; font-size: 24px; font-weight: 800; margin: 0 0 4px; }
 .meta { color: #94a3b8; font-size: 14px; overflow-wrap: anywhere; }
 .tweet { padding: 20px 0; border-bottom: 1px solid rgba(148,163,184,.16); }
 .tweet:last-child { border-bottom: 0; }
 .tweetTop { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 10px; color: #94a3b8; font-size: 14px; }
-.author { color: #f1f5f9; font-weight: 750; }
-.handle { color: #93a4bd; margin-left: 6px; font-weight: 500; }
+.handle { color: #f1f5f9; font-weight: 750; margin-left: 0; }
+.authorName { color: #93a4bd; margin-left: 8px; font-weight: 500; }
 .text { color: #e5e7eb; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 20px; line-height: 1.5; }
 .mediaGrid { display: grid; gap: 8px; margin: 16px 0 8px; overflow: hidden; border: 1px solid rgba(148,163,184,.14); border-radius: 12px; background: #050816; }
 .mediaCount1 { grid-template-columns: 1fr; }
@@ -26,3 +25,11 @@ button:hover { background: linear-gradient(180deg, #3b82f6, #2563eb); }
 .index { color: #7f8ea3; font-variant-numeric: tabular-nums; }
 .error { color: #fca5a5; font-weight: 700; }
 @media print { #toolbar { display: none; } body { background: #0b1020; } main { padding: 0; } #capture { box-shadow: none; width: auto; border-radius: 0; } }
+
+.tweetControls { display: flex; align-items: center; gap: 8px; }
+.tweetVisibility { padding: 4px 8px; border-radius: 8px; font-size: 12px; color: #cbd5e1; background: rgba(30,41,59,.85); border-color: rgba(148,163,184,.28); box-shadow: none; }
+.tweetVisibility:hover { background: rgba(51,65,85,.95); }
+.hiddenTweet { opacity: .55; }
+.hiddenTweet .text, .hiddenTweet .mediaGrid, .hiddenTweet .meta { display: none; }
+.additionalThread.hidden { display: none; }
+.sectionLabel { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid rgba(148,163,184,.22); color: #93a4bd; font-size: 13px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }

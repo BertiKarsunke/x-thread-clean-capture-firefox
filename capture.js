@@ -2,11 +2,15 @@ const captureEl = document.getElementById('capture');
 const statusEl = document.getElementById('status');
 const EXPORT_BACKGROUND = '#0b1020';
 let latestThread = null;
+let showAdditional = false;
+const hiddenTweetKeys = new Set();
 
 init();
 
 document.getElementById('download').addEventListener('click', downloadPng);
 document.getElementById('copyText').addEventListener('click', copyThreadText);
+const toggleAdditionalButton = document.getElementById('toggleAdditional');
+if (toggleAdditionalButton) toggleAdditionalButton.addEventListener('click', toggleAdditionalThread);
 
 async function init() {
   const response = await browser.runtime.sendMessage({ type: 'X_THREAD_CAPTURE_GET' });
@@ -23,12 +27,13 @@ async function init() {
   await hydrateTweetMedia(latestThread);
   renderThread(latestThread);
 
-  const mediaCount = latestThread.tweets.reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
-  statusEl.textContent = `${latestThread.tweets.length} tweet(s), ${mediaCount} image(s) ready`;
+  const mediaCount = getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
+  updateAdditionalButton();
+  updateStatus(mediaCount);
 }
 
 async function hydrateTweetMedia(thread) {
-  const items = thread.tweets.flatMap((tweet) => tweet.media || []);
+  const items = getAllTweets(thread).flatMap((tweet) => tweet.media || []);
   if (!items.length) return;
 
   statusEl.textContent = `Loading ${items.length} image(s)...`;
@@ -50,19 +55,39 @@ function renderThread(thread) {
   const header = document.createElement('header');
   header.className = 'header';
   header.innerHTML = `
-    <h1 class="title">Clean X Thread Capture</h1>
-    <div class="meta">${escapeHtml(thread.authorHandle || 'Unknown author')} · ${escapeHtml(thread.sourceUrl || '')}</div>
+    <div class="meta">${escapeHtml(formatIdentity(thread.authorHandle || '', thread.authorName || ''))} · ${escapeHtml(thread.sourceUrl || '')}</div>
     <div class="meta">Captured ${escapeHtml(new Date(thread.capturedAt).toLocaleString())}</div>
   `;
   root.append(header);
 
-  for (const tweet of thread.tweets) {
+  renderTweetList(root, thread.tweets || [], thread.tweets?.length || 0, 'main');
+
+  const additionalTweets = thread.additionalTweets || [];
+  if (additionalTweets.length) {
+    const section = document.createElement('section');
+    section.className = `additionalThread${showAdditional ? '' : ' hidden'}`;
+    section.innerHTML = `<div class="sectionLabel">Additional thread / replies</div>`;
+    renderTweetList(section, additionalTweets, additionalTweets.length, 'additional');
+    root.append(section);
+  }
+
+  captureEl.replaceChildren(root);
+  updateAdditionalButton();
+}
+
+function renderTweetList(root, tweets, total, group) {
+  for (const tweet of tweets) {
+    const key = getTweetKey(tweet, group);
     const article = document.createElement('article');
-    article.className = 'tweet';
+    article.className = `tweet${hiddenTweetKeys.has(key) ? ' hiddenTweet' : ''}`;
+    article.dataset.tweetKey = key;
     article.innerHTML = `
       <div class="tweetTop">
-        <div><span class="author">${escapeHtml(tweet.authorName || tweet.handle || 'Unknown')}</span><span class="handle">${escapeHtml(tweet.handle || '')}</span></div>
-        <div class="index">${tweet.index}/${thread.tweets.length}</div>
+        <div><span class="handle">${escapeHtml(tweet.handle || '')}</span>${tweet.authorName ? `<span class="authorName">${escapeHtml(tweet.authorName)}</span>` : ''}</div>
+        <div class="tweetControls">
+          <span class="index">${tweet.index}/${total}</span>
+          <button class="tweetVisibility" type="button" data-tweet-key="${escapeHtml(key)}">${hiddenTweetKeys.has(key) ? '노출' : '비노출'}</button>
+        </div>
       </div>
       <div class="text">${escapeHtml(tweet.text || '')}</div>
       ${renderMedia(tweet.media || [])}
@@ -70,8 +95,60 @@ function renderThread(thread) {
     `;
     root.append(article);
   }
+}
 
-  captureEl.replaceChildren(root);
+captureEl.addEventListener('click', (event) => {
+  const button = event.target.closest('.tweetVisibility');
+  if (!button) return;
+  const key = button.dataset.tweetKey;
+  if (!key) return;
+  if (hiddenTweetKeys.has(key)) hiddenTweetKeys.delete(key);
+  else hiddenTweetKeys.add(key);
+  renderThread(latestThread);
+  const mediaCount = getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
+  updateStatus(mediaCount);
+});
+
+function toggleAdditionalThread() {
+  showAdditional = !showAdditional;
+  renderThread(latestThread);
+  const mediaCount = getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
+  updateStatus(mediaCount);
+}
+
+function updateAdditionalButton() {
+  if (!toggleAdditionalButton) return;
+  const count = latestThread?.additionalTweets?.length || 0;
+  toggleAdditionalButton.hidden = count === 0;
+  toggleAdditionalButton.textContent = showAdditional ? `추가 thread 숨기기 (${count})` : `추가 thread 보이기 (${count})`;
+}
+
+function updateStatus(mediaCount) {
+  const visibleCount = getVisibleTweets().length;
+  const hiddenCount = hiddenTweetKeys.size;
+  statusEl.textContent = `${visibleCount} tweet(s), ${mediaCount} image(s) ready${hiddenCount ? ` · ${hiddenCount} hidden` : ''}`;
+}
+
+function getAllTweets(thread) {
+  return [...(thread?.tweets || []), ...(thread?.additionalTweets || [])];
+}
+
+function getVisibleTweets() {
+  if (!latestThread) return [];
+  const main = (latestThread.tweets || []).map((tweet) => ({ tweet, group: 'main' }));
+  const extra = showAdditional ? (latestThread.additionalTweets || []).map((tweet) => ({ tweet, group: 'additional' })) : [];
+  return [...main, ...extra]
+    .filter(({ tweet, group }) => !hiddenTweetKeys.has(getTweetKey(tweet, group)))
+    .map(({ tweet }) => tweet);
+}
+
+function getTweetKey(tweet, group) {
+  return `${group}:${tweet.statusId || tweet.url || `${tweet.handle}:${tweet.time}:${(tweet.text || '').slice(0, 80)}`}`;
+}
+
+function formatIdentity(handle, name) {
+  if (handle && name) return `${handle} (${name})`;
+  return handle || name || 'Unknown author';
 }
 
 function renderMedia(media) {
@@ -106,7 +183,8 @@ async function downloadPng() {
 
 async function copyThreadText() {
   if (!latestThread?.tweets?.length) return;
-  const text = latestThread.tweets.map((tweet) => `${tweet.index}/${latestThread.tweets.length} ${tweet.handle}\n${tweet.text}`).join('\n\n---\n\n');
+  const visibleTweets = getVisibleTweets();
+  const text = visibleTweets.map((tweet, index) => `${index + 1}/${visibleTweets.length} ${formatIdentity(tweet.handle || '', tweet.authorName || '')}\n${tweet.text}`).join('\n\n---\n\n');
   await navigator.clipboard.writeText(text);
   statusEl.textContent = 'Thread text copied';
 }
@@ -118,6 +196,9 @@ async function elementToPngBlob(element) {
   const width = Math.ceil(rect.width);
   const height = Math.ceil(element.scrollHeight);
   const clone = element.cloneNode(true);
+  clone.querySelectorAll('.hiddenTweet').forEach((node) => node.remove());
+  clone.querySelectorAll('.additionalThread.hidden').forEach((node) => node.remove());
+  clone.querySelectorAll('button').forEach((node) => node.remove());
   clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
   clone.style.width = `${width}px`;
   clone.style.margin = '0';

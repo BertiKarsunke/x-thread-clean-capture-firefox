@@ -64,15 +64,17 @@ async function collectThread() {
   await delay(150);
 
   const all = [...accumulated.values()];
-  const threadTweets = pickThreadTweets(all, statusId, authorHandle);
-  if (!threadTweets.length) throw new Error('Found tweets, but could not isolate the thread.');
+  const threadData = pickThreadData(all, statusId, authorHandle);
+  if (!threadData.tweets.length) throw new Error('Found tweets, but could not isolate the thread.');
 
   return {
     sourceUrl: location.href,
     rootStatusId: statusId,
     authorHandle,
+    authorName: target.authorName || '',
     capturedAt: new Date().toISOString(),
-    tweets: threadTweets
+    tweets: threadData.tweets,
+    additionalTweets: threadData.additionalTweets
   };
 }
 
@@ -111,7 +113,7 @@ function mergeMedia(left, right) {
   return [...byUrl.values()];
 }
 
-function pickThreadTweets(tweets, rootStatusId, authorHandle) {
+function pickThreadData(tweets, rootStatusId, authorHandle) {
   const byId = new Map();
   for (const tweet of tweets) {
     const key = tweet.statusId || `${tweet.handle}:${tweet.text.slice(0, 80)}`;
@@ -137,7 +139,20 @@ function pickThreadTweets(tweets, rootStatusId, authorHandle) {
     else if (sameAuthor.length > 0 && tweet.top - sameAuthor[sameAuthor.length - 1].top > 1400) break;
   }
 
-  return sameAuthor.length ? sameAuthor.map((tweet, index) => ({ ...tweet, index: index + 1 })) : afterRoot.slice(0, 1).map((tweet) => ({ ...tweet, index: 1 }));
+  const primary = sameAuthor.length ? sameAuthor : afterRoot.slice(0, 1);
+  const primaryKeys = new Set(primary.map(tweetKey));
+  const additionalTweets = afterRoot
+    .filter((tweet) => !primaryKeys.has(tweetKey(tweet)))
+    .map((tweet, index) => ({ ...tweet, index: index + 1 }));
+
+  return {
+    tweets: primary.map((tweet, index) => ({ ...tweet, index: index + 1 })),
+    additionalTweets
+  };
+}
+
+function tweetKey(tweet) {
+  return tweet.statusId || `${tweet.handle}:${tweet.time}:${(tweet.text || '').slice(0, 80)}`;
 }
 
 function extractVisibleTweets() {
