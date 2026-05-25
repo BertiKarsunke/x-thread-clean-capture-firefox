@@ -34,7 +34,7 @@ X는 동적 앱이라 긴 thread를 한 번에 모두 로드하지 않습니다.
 
 ## 패키지
 
-`dist/x-thread-clean-capture-firefox-v1.0.4.zip` 파일은 `manifest.json`이 archive root에 오도록 만든 Firefox WebExtension ZIP입니다.
+`dist/x-thread-clean-capture-firefox-v1.0.5.zip` 파일은 `manifest.json`이 archive root에 오도록 만든 Firefox WebExtension ZIP입니다.
 
 ## 권한
 
