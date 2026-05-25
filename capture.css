@@ -32,3 +32,9 @@ button:hover { background: linear-gradient(180deg, #3b82f6, #2563eb); }
 .hiddenTweet { display: none; }
 .additionalThread.hidden { display: none; }
 .sectionLabel { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid rgba(148,163,184,.22); color: #93a4bd; font-size: 13px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+
+.quotedTweet { margin: 16px 0 8px; padding: 14px; border: 1px solid rgba(96,165,250,.28); border-left: 4px solid #60a5fa; border-radius: 12px; background: rgba(15,23,42,.72); }
+.quoteBadge { display: inline-flex; margin-bottom: 8px; padding: 2px 8px; border-radius: 999px; color: #bfdbfe; background: rgba(37,99,235,.22); font-size: 12px; font-weight: 750; letter-spacing: .02em; }
+.quoteTop { margin-bottom: 8px; font-size: 14px; color: #94a3b8; }
+.quoteText { color: #dbeafe; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.45; }
+.quotedTweet .mediaGrid { margin-top: 12px; }

@@ -98,9 +98,24 @@ function mergeTweets(targetMap, tweets) {
       time: previous.time || tweet.time,
       url: previous.url || tweet.url,
       top: Math.min(previous.top ?? tweet.top, tweet.top ?? previous.top),
-      media: mergedMedia
+      media: mergedMedia,
+      quotedTweet: mergeQuotedTweet(previous.quotedTweet, tweet.quotedTweet)
     });
   }
+}
+
+function mergeQuotedTweet(left, right) {
+  if (!left) return right || null;
+  if (!right) return left;
+  return {
+    ...left,
+    ...right,
+    text: (right.text || '').length > (left.text || '').length ? right.text : left.text,
+    authorName: left.authorName || right.authorName,
+    handle: left.handle || right.handle,
+    url: left.url || right.url,
+    media: mergeMedia(left.media || [], right.media || [])
+  };
 }
 
 function mergeMedia(left, right) {
@@ -124,6 +139,7 @@ function pickThreadData(tweets, rootStatusId, authorHandle) {
       ...tweet,
       text: tweet.text.length > previous.text.length ? tweet.text : previous.text,
       media: mergeMedia(previous.media || [], tweet.media || []),
+      quotedTweet: mergeQuotedTweet(previous.quotedTweet, tweet.quotedTweet),
       top: Math.min(previous.top ?? tweet.top, tweet.top ?? previous.top)
     });
   }
@@ -162,18 +178,23 @@ function extractVisibleTweets() {
 }
 
 function articleToTweet(article) {
-  const link = [...article.querySelectorAll('a[href*="/status/"]')]
+  const quoteRoot = findQuotedTweetRoot(article);
+  const timeLink = article.querySelector('time')?.closest('a[href*="/status/"]');
+  const link = timeLink?.getAttribute('href') || [...article.querySelectorAll('a[href*="/status/"]')]
+    .filter((a) => !quoteRoot?.contains(a))
     .map((a) => a.getAttribute('href'))
     .find((href) => /\/status\/\d+/.test(href || ''));
   const statusId = link ? getStatusId(link) : null;
 
-  const handle = extractHandle(article);
-  const authorName = extractAuthorName(article, handle);
+  const handle = extractHandle(article, quoteRoot);
+  const authorName = extractAuthorName(article, handle, quoteRoot);
   const time = article.querySelector('time')?.getAttribute('datetime') || '';
-  const textNodes = [...article.querySelectorAll('[data-testid="tweetText"]')];
+  const textNodes = [...article.querySelectorAll('[data-testid="tweetText"]')]
+    .filter((node) => !quoteRoot?.contains(node));
   const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
-  const media = extractTweetMedia(article);
-  if (!text && !statusId && !media.length) return null;
+  const media = extractTweetMedia(article, quoteRoot);
+  const quotedTweet = quoteRoot ? extractQuotedTweet(quoteRoot) : null;
+  if (!text && !statusId && !media.length && !quotedTweet) return null;
 
   const rect = article.getBoundingClientRect();
   return {
@@ -184,16 +205,18 @@ function articleToTweet(article) {
     time,
     text: text || '[text unavailable]',
     media,
+    quotedTweet,
     top: rect.top + window.scrollY
   };
 }
 
-function extractTweetMedia(article) {
+function extractTweetMedia(article, excludeRoot = null) {
   const nodes = [
     ...article.querySelectorAll('[data-testid="tweetPhoto"] img, a[href*="/photo/"] img, img[src*="pbs.twimg.com/media/"], img[srcset*="pbs.twimg.com/media/"]')
   ];
   const seen = new Set();
   return nodes
+    .filter((img) => !excludeRoot?.contains(img))
     .map((img) => {
       const src = img.currentSrc || img.src || img.getAttribute('src') || firstSrcFromSrcset(img.getAttribute('srcset')) || '';
       const url = normalizeMediaUrl(src);
@@ -210,6 +233,42 @@ function extractTweetMedia(article) {
     })
     .filter(Boolean);
 }
+function findQuotedTweetRoot(article) {
+  const mainTime = article.querySelector('time');
+  const candidates = [...article.querySelectorAll('div[role="link"], a[role="link"], div[tabindex="0"]')]
+    .filter((node) => node !== article)
+    .filter((node) => node.querySelector('[data-testid="tweetText"], a[href*="/status/"], time'))
+    .filter((node) => !mainTime || !node.contains(mainTime))
+    .filter((node) => node.getBoundingClientRect().height > 24);
+
+  candidates.sort((a, b) => {
+    const aStatus = a.querySelector('a[href*="/status/"], time') ? 1 : 0;
+    const bStatus = b.querySelector('a[href*="/status/"], time') ? 1 : 0;
+    if (aStatus !== bStatus) return bStatus - aStatus;
+    return a.getBoundingClientRect().height - b.getBoundingClientRect().height;
+  });
+  return candidates[0] || null;
+}
+
+function extractQuotedTweet(root) {
+  const linkNode = root.matches('a[href*="/status/"]') ? root : root.querySelector('a[href*="/status/"]');
+  const link = linkNode?.getAttribute('href') || '';
+  const handle = extractHandle(root);
+  const authorName = extractAuthorName(root, handle);
+  const textNodes = [...root.querySelectorAll('[data-testid="tweetText"]')];
+  const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
+  const media = extractTweetMedia(root);
+  if (!text && !handle && !media.length && !link) return null;
+  return {
+    statusId: link ? getStatusId(link) : null,
+    url: link ? new URL(link, location.origin).toString() : '',
+    authorName,
+    handle,
+    text: text || '[text unavailable]',
+    media
+  };
+}
+
 
 function firstSrcFromSrcset(srcset) {
   if (!srcset) return '';
@@ -227,14 +286,16 @@ function normalizeMediaUrl(src) {
   }
 }
 
-function extractHandle(article) {
-  const handleNode = [...article.querySelectorAll('a[role="link"] span')]
+function extractHandle(article, excludeRoot = null) {
+  const handleNode = [...article.querySelectorAll('a[role="link"] span, span')]
+    .filter((span) => !excludeRoot?.contains(span))
     .find((span) => /^@\w+/.test((span.textContent || '').trim()));
   return handleNode ? handleNode.textContent.trim() : '';
 }
 
-function extractAuthorName(article, handle) {
-  const userLink = [...article.querySelectorAll('a[role="link"]')]
+function extractAuthorName(article, handle, excludeRoot = null) {
+  const userLink = [...article.querySelectorAll('a[role="link"], div[role="link"]')]
+    .filter((a) => !excludeRoot?.contains(a))
     .find((a) => handle && (a.textContent || '').includes(handle));
   if (!userLink) return '';
   const first = [...userLink.querySelectorAll('span')]

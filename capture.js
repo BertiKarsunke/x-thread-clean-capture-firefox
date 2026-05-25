@@ -27,13 +27,12 @@ async function init() {
   await hydrateTweetMedia(latestThread);
   renderThread(latestThread);
 
-  const mediaCount = getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
   updateAdditionalButton();
-  updateStatus(mediaCount);
+  updateStatus(getVisibleMediaCount());
 }
 
 async function hydrateTweetMedia(thread) {
-  const items = getAllTweets(thread).flatMap((tweet) => tweet.media || []);
+  const items = getAllMedia(thread);
   if (!items.length) return;
 
   statusEl.textContent = `Loading ${items.length} image(s)...`;
@@ -91,6 +90,7 @@ function renderTweetList(root, tweets, total, group) {
       </div>
       <div class="text">${escapeHtml(tweet.text || '')}</div>
       ${renderMedia(tweet.media || [])}
+      ${renderQuotedTweet(tweet.quotedTweet)}
       ${tweet.time ? `<div class="meta">${escapeHtml(new Date(tweet.time).toLocaleString())}</div>` : ''}
     `;
     root.append(article);
@@ -105,15 +105,13 @@ captureEl.addEventListener('click', (event) => {
   if (hiddenTweetKeys.has(key)) hiddenTweetKeys.delete(key);
   else hiddenTweetKeys.add(key);
   renderThread(latestThread);
-  const mediaCount = getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
-  updateStatus(mediaCount);
+  updateStatus(getVisibleMediaCount());
 });
 
 function toggleAdditionalThread() {
   showAdditional = !showAdditional;
   renderThread(latestThread);
-  const mediaCount = getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0), 0);
-  updateStatus(mediaCount);
+  updateStatus(getVisibleMediaCount());
 }
 
 function updateAdditionalButton() {
@@ -121,6 +119,10 @@ function updateAdditionalButton() {
   const count = latestThread?.additionalTweets?.length || 0;
   toggleAdditionalButton.hidden = count === 0;
   toggleAdditionalButton.textContent = showAdditional ? `추가 thread 숨기기 (${count})` : `추가 thread 보이기 (${count})`;
+}
+
+function getVisibleMediaCount() {
+  return getVisibleTweets().reduce((count, tweet) => count + (tweet.media?.length || 0) + (tweet.quotedTweet?.media?.length || 0), 0);
 }
 
 function updateStatus(mediaCount) {
@@ -131,6 +133,13 @@ function updateStatus(mediaCount) {
 
 function getAllTweets(thread) {
   return [...(thread?.tweets || []), ...(thread?.additionalTweets || [])];
+}
+
+function getAllMedia(thread) {
+  return getAllTweets(thread).flatMap((tweet) => [
+    ...(tweet.media || []),
+    ...(tweet.quotedTweet?.media || [])
+  ]);
 }
 
 function getVisibleTweets() {
@@ -149,6 +158,18 @@ function getTweetKey(tweet, group) {
 function formatIdentity(handle, name) {
   if (handle && name) return `${handle} (${name})`;
   return handle || name || 'Unknown author';
+}
+
+function renderQuotedTweet(quotedTweet) {
+  if (!quotedTweet) return '';
+  return `
+    <aside class="quotedTweet">
+      <div class="quoteBadge">인용 원 트윗</div>
+      <div class="quoteTop"><span class="handle">${escapeHtml(quotedTweet.handle || '')}</span>${quotedTweet.authorName ? `<span class="authorName">${escapeHtml(quotedTweet.authorName)}</span>` : ''}</div>
+      <div class="quoteText">${escapeHtml(quotedTweet.text || '')}</div>
+      ${renderMedia(quotedTweet.media || [])}
+    </aside>
+  `;
 }
 
 function renderMedia(media) {
@@ -184,7 +205,12 @@ async function downloadPng() {
 async function copyThreadText() {
   if (!latestThread?.tweets?.length) return;
   const visibleTweets = getVisibleTweets();
-  const text = visibleTweets.map((tweet, index) => `${index + 1}/${visibleTweets.length} ${formatIdentity(tweet.handle || '', tweet.authorName || '')}\n${tweet.text}`).join('\n\n---\n\n');
+  const text = visibleTweets.map((tweet, index) => {
+    const quoteText = tweet.quotedTweet
+      ? `\n\n[인용 원 트윗] ${formatIdentity(tweet.quotedTweet.handle || '', tweet.quotedTweet.authorName || '')}\n${tweet.quotedTweet.text || ''}`
+      : '';
+    return `${index + 1}/${visibleTweets.length} ${formatIdentity(tweet.handle || '', tweet.authorName || '')}\n${tweet.text}${quoteText}`;
+  }).join('\n\n---\n\n');
   await navigator.clipboard.writeText(text);
   statusEl.textContent = 'Thread text copied';
 }
