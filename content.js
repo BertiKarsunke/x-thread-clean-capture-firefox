@@ -178,7 +178,10 @@ function extractVisibleTweets() {
 }
 
 function articleToTweet(article) {
-  const quoteRoot = findQuotedTweetRoot(article);
+  const allTextNodes = [...article.querySelectorAll('[data-testid="tweetText"]')];
+  const detectedQuoteRoot = findQuotedTweetRoot(article);
+  const fallbackQuoteRoot = detectedQuoteRoot ? null : findFallbackQuotedTweetRoot(article, allTextNodes);
+  const quoteRoot = detectedQuoteRoot || fallbackQuoteRoot;
   const timeLink = article.querySelector('time')?.closest('a[href*="/status/"]');
   const link = timeLink?.getAttribute('href') || [...article.querySelectorAll('a[href*="/status/"]')]
     .filter((a) => !quoteRoot?.contains(a))
@@ -189,7 +192,6 @@ function articleToTweet(article) {
   const handle = extractHandle(article, quoteRoot);
   const authorName = extractAuthorName(article, handle, quoteRoot);
   const time = article.querySelector('time')?.getAttribute('datetime') || '';
-  const allTextNodes = [...article.querySelectorAll('[data-testid="tweetText"]')];
   const textNodes = allTextNodes.filter((node) => !quoteRoot?.contains(node));
   const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
   const media = extractTweetMedia(article, quoteRoot);
@@ -286,6 +288,25 @@ function extractQuotedTweet(root) {
     text: text || '[text unavailable]',
     media
   };
+}
+
+function findFallbackQuotedTweetRoot(article, allTextNodes) {
+  if (allTextNodes.length <= 1) return null;
+  const mainText = allTextNodes[0];
+  const quoteText = allTextNodes[1];
+  let node = quoteText;
+  let best = quoteText;
+
+  while (node && node !== article) {
+    const parent = node.parentElement;
+    if (!parent || parent === article || parent.contains(mainText)) break;
+    best = parent;
+    node = parent;
+  }
+
+  const clickable = best.closest('div[role="link"], div[tabindex="0"], a[role="link"]');
+  if (clickable && article.contains(clickable) && !clickable.contains(mainText)) return clickable;
+  return best === quoteText ? null : best;
 }
 
 function extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, mainTextNodes) {
