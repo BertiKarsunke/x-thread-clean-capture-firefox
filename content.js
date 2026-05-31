@@ -189,11 +189,11 @@ function articleToTweet(article) {
   const handle = extractHandle(article, quoteRoot);
   const authorName = extractAuthorName(article, handle, quoteRoot);
   const time = article.querySelector('time')?.getAttribute('datetime') || '';
-  const textNodes = [...article.querySelectorAll('[data-testid="tweetText"]')]
-    .filter((node) => !quoteRoot?.contains(node));
+  const allTextNodes = [...article.querySelectorAll('[data-testid="tweetText"]')];
+  const textNodes = allTextNodes.filter((node) => !quoteRoot?.contains(node));
   const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
   const media = extractTweetMedia(article, quoteRoot);
-  const quotedTweet = quoteRoot ? extractQuotedTweet(quoteRoot) : null;
+  const quotedTweet = extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, textNodes);
   if (!text && !statusId && !media.length && !quotedTweet) return null;
 
   const rect = article.getBoundingClientRect();
@@ -285,6 +285,36 @@ function extractQuotedTweet(root) {
     handle,
     text: text || '[text unavailable]',
     media
+  };
+}
+
+function extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, mainTextNodes) {
+  if (quoteRoot) return extractQuotedTweet(quoteRoot);
+
+  const mainSet = new Set(mainTextNodes);
+  const quoteTextNodes = allTextNodes.filter((node) => !mainSet.has(node));
+  if (!quoteTextNodes.length && allTextNodes.length <= 1) return null;
+
+  const fallbackTextNodes = quoteTextNodes.length ? quoteTextNodes : allTextNodes.slice(1);
+  const text = fallbackTextNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
+  if (!text) return null;
+
+  const firstQuoteText = fallbackTextNodes[0];
+  const quoteContainer = firstQuoteText?.closest('div[role="link"], div[tabindex="0"], a[role="link"], div');
+  const linkNode = quoteContainer?.querySelector?.('a[href*="/status/"]') || null;
+  const link = linkNode?.getAttribute('href') || '';
+  const handle = quoteContainer ? extractHandle(quoteContainer) : '';
+  const authorName = quoteContainer ? extractAuthorName(quoteContainer, handle) : '';
+  const media = quoteContainer ? extractTweetMedia(quoteContainer) : [];
+
+  return {
+    statusId: link ? getStatusId(link) : null,
+    url: link ? new URL(link, location.origin).toString() : '',
+    authorName,
+    handle,
+    text,
+    media,
+    fallback: true
   };
 }
 

@@ -10,7 +10,7 @@ X/Twitter thread 페이지에서 주변 UI 없이 텍스트와 첨부 이미지�
 - 깔끔한 capture 페이지를 열어 thread 내용만 보여줍니다.
 - **Download PNG**로 이미지 저장, **Copy text**로 텍스트 복사가 가능합니다.
 - 캡처 페이지에서 각 tweet을 `비노출/노출`로 토글할 수 있고, 추가 thread/reply는 버튼으로 표시하거나 숨길 수 있습니다.
-- 인용 tweet은 `QUOTE` 배지와 `ORIGINAL TWEET · 인용 원문` 카드/구분선으로 명확히 구별해서 표시합니다.
+- 인용 tweet은 `QUOTE` 배지와 `ORIGINAL TWEET · 인용 원문` 카드/구분선으로 명확히 구별해서 표시합니다. X DOM에서 quote card root가 안 잡히는 경우에도 두 번째 tweet text를 original tweet으로 분리하는 fallback을 적용합니다.
 
 ## 의도적으로 제외한 것
 
@@ -35,7 +35,7 @@ X는 동적 앱이라 긴 thread를 한 번에 모두 로드하지 않습니다.
 
 ## 패키지
 
-`dist/x-thread-clean-capture-firefox-v1.0.7.zip` 파일은 `manifest.json`이 archive root에 오도록 만든 Firefox WebExtension ZIP입니다.
+`dist/x-thread-clean-capture-firefox-v1.0.8.zip` 파일은 `manifest.json`이 archive root에 오도록 만든 Firefox WebExtension ZIP입니다.
 
 ## 권한
 
