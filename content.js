@@ -196,7 +196,9 @@ function articleToTweet(article) {
   const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
   const media = extractTweetMedia(article, quoteRoot);
   const quotedTweet = extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, textNodes);
-  if (!text && !statusId && !media.length && !quotedTweet) return null;
+  const quoteMediaUrls = new Set((quotedTweet?.media || []).map((item) => item.url));
+  const mainMedia = quoteMediaUrls.size ? media.filter((item) => !quoteMediaUrls.has(item.url)) : media;
+  if (!text && !statusId && !mainMedia.length && !quotedTweet) return null;
 
   const rect = article.getBoundingClientRect();
   return {
@@ -206,7 +208,7 @@ function articleToTweet(article) {
     handle,
     time,
     text: text || '[text unavailable]',
-    media,
+    media: mainMedia.map((item) => ({ ...item, owner: quotedTweet ? 'quote' : 'tweet' })),
     quotedTweet,
     top: rect.top + window.scrollY
   };
@@ -286,7 +288,7 @@ function extractQuotedTweet(root) {
     authorName,
     handle,
     text: text || '[text unavailable]',
-    media
+    media: media.map((item) => ({ ...item, owner: 'original' }))
   };
 }
 
@@ -334,7 +336,7 @@ function extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, mainTex
     authorName,
     handle,
     text,
-    media,
+    media: media.map((item) => ({ ...item, owner: 'original' })),
     fallback: true
   };
 }

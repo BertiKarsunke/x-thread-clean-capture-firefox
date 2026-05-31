@@ -89,7 +89,7 @@ function renderTweetList(root, tweets, total, group) {
         </div>
       </div>
       <div class="text">${escapeHtml(tweet.text || '')}</div>
-      ${renderMedia(tweet.media || [])}
+      ${renderMedia(tweet.media || [], tweet.quotedTweet ? 'quote' : 'tweet')}
       ${renderQuotedTweet(tweet.quotedTweet)}
       ${tweet.time ? `<div class="meta">${escapeHtml(new Date(tweet.time).toLocaleString())}</div>` : ''}
     `;
@@ -168,19 +168,24 @@ function renderQuotedTweet(quotedTweet) {
       <div class="quoteBadge">ORIGINAL TWEET · 인용 원문</div>
       <div class="quoteTop"><span class="handle">${escapeHtml(quotedTweet.handle || '')}</span>${quotedTweet.authorName ? `<span class="authorName">${escapeHtml(quotedTweet.authorName)}</span>` : ''}</div>
       <div class="quoteText">${escapeHtml(quotedTweet.text || '')}</div>
-      ${renderMedia(quotedTweet.media || [])}
+      ${renderMedia(quotedTweet.media || [], 'original')}
     </aside>
   `;
 }
 
-function renderMedia(media) {
+function renderMedia(media, owner = 'tweet') {
   const images = media.filter((item) => item.type === 'image');
   if (!images.length) return '';
+  const label = owner === 'original' ? 'ORIGINAL TWEET IMAGE' : owner === 'quote' ? 'QUOTE TWEET IMAGE' : 'TWEET IMAGE';
+  const className = owner === 'original' ? 'originalMedia' : owner === 'quote' ? 'quoteMedia' : 'tweetMedia';
   return `
-    <div class="mediaGrid mediaCount${Math.min(images.length, 4)}">
-      ${images.map((item) => item.dataUrl
-        ? `<img class="tweetImage" src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.alt || 'tweet image')}" />`
-        : `<div class="mediaError">Image unavailable${item.error ? `: ${escapeHtml(item.error)}` : ''}</div>`).join('')}
+    <div class="mediaBlock ${className}">
+      <div class="mediaOwnerBadge">${escapeHtml(label)}</div>
+      <div class="mediaGrid mediaCount${Math.min(images.length, 4)}">
+        ${images.map((item) => item.dataUrl
+          ? `<figure class="mediaFigure"><img class="tweetImage" src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.alt || 'tweet image')}" /><figcaption>${escapeHtml(label)}</figcaption></figure>`
+          : `<div class="mediaError">${escapeHtml(label)} unavailable${item.error ? `: ${escapeHtml(item.error)}` : ''}</div>`).join('')}
+      </div>
     </div>
   `;
 }
