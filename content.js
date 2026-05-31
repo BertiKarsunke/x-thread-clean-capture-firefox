@@ -234,20 +234,39 @@ function extractTweetMedia(article, excludeRoot = null) {
     .filter(Boolean);
 }
 function findQuotedTweetRoot(article) {
-  const mainTime = article.querySelector('time');
-  const candidates = [...article.querySelectorAll('div[role="link"], a[role="link"], div[tabindex="0"]')]
-    .filter((node) => node !== article)
-    .filter((node) => node.querySelector('[data-testid="tweetText"], a[href*="/status/"], time'))
-    .filter((node) => !mainTime || !node.contains(mainTime))
-    .filter((node) => node.getBoundingClientRect().height > 24);
+  const mainTime = article.querySelector(':scope time');
+  const mainStatusLink = mainTime?.closest('a[href*="/status/"]')?.getAttribute('href') || '';
+  const quoteStatusLinks = [...article.querySelectorAll('a[href*="/status/"]')]
+    .filter((link) => !mainTime || !link.contains(mainTime))
+    .filter((link) => link.getAttribute('href') !== mainStatusLink)
+    .filter((link) => !/\/photo\//.test(link.getAttribute('href') || ''));
 
-  candidates.sort((a, b) => {
-    const aStatus = a.querySelector('a[href*="/status/"], time') ? 1 : 0;
-    const bStatus = b.querySelector('a[href*="/status/"], time') ? 1 : 0;
-    if (aStatus !== bStatus) return bStatus - aStatus;
-    return a.getBoundingClientRect().height - b.getBoundingClientRect().height;
-  });
-  return candidates[0] || null;
+  const candidates = new Set();
+  for (const link of quoteStatusLinks) {
+    const root = link.closest('div[role="link"], div[tabindex="0"], a[role="link"]') || link;
+    if (root && root !== article && article.contains(root)) candidates.add(root);
+  }
+
+  for (const node of article.querySelectorAll('div[role="link"], a[role="link"], div[tabindex="0"]')) {
+    if (node === article || (mainTime && node.contains(mainTime))) continue;
+    if (!node.querySelector('[data-testid="tweetText"], a[href*="/status/"], time')) continue;
+    candidates.add(node);
+  }
+
+  const ranked = [...candidates]
+    .filter((node) => node.getBoundingClientRect().height > 24)
+    .sort((a, b) => scoreQuotedRoot(b) - scoreQuotedRoot(a) || a.getBoundingClientRect().height - b.getBoundingClientRect().height);
+  return ranked[0] || null;
+}
+
+function scoreQuotedRoot(node) {
+  let score = 0;
+  if (node.querySelector('a[href*="/status/"], time')) score += 4;
+  if (node.querySelector('[data-testid="tweetText"]')) score += 3;
+  if ((node.textContent || '').includes('@')) score += 1;
+  const style = getComputedStyle(node);
+  if (style.borderTopWidth !== '0px' || style.borderLeftWidth !== '0px') score += 1;
+  return score;
 }
 
 function extractQuotedTweet(root) {

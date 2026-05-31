@@ -78,7 +78,7 @@ function renderTweetList(root, tweets, total, group) {
   for (const tweet of tweets) {
     const key = getTweetKey(tweet, group);
     const article = document.createElement('article');
-    article.className = `tweet${hiddenTweetKeys.has(key) ? ' hiddenTweet' : ''}`;
+    article.className = `tweet${tweet.quotedTweet ? ' hasQuotedTweet' : ''}${hiddenTweetKeys.has(key) ? ' hiddenTweet' : ''}`;
     article.dataset.tweetKey = key;
     article.innerHTML = `
       <div class="tweetTop">
@@ -163,8 +163,9 @@ function formatIdentity(handle, name) {
 function renderQuotedTweet(quotedTweet) {
   if (!quotedTweet) return '';
   return `
-    <aside class="quotedTweet">
-      <div class="quoteBadge">인용 원 트윗</div>
+    <div class="quoteDivider"><span>아래는 인용된 ORIGINAL TWEET</span></div>
+    <aside class="quotedTweet" aria-label="인용된 original tweet">
+      <div class="quoteBadge">ORIGINAL TWEET · 인용 원문</div>
       <div class="quoteTop"><span class="handle">${escapeHtml(quotedTweet.handle || '')}</span>${quotedTweet.authorName ? `<span class="authorName">${escapeHtml(quotedTweet.authorName)}</span>` : ''}</div>
       <div class="quoteText">${escapeHtml(quotedTweet.text || '')}</div>
       ${renderMedia(quotedTweet.media || [])}

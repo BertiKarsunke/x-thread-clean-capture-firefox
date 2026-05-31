@@ -33,8 +33,12 @@ button:hover { background: linear-gradient(180deg, #3b82f6, #2563eb); }
 .additionalThread.hidden { display: none; }
 .sectionLabel { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid rgba(148,163,184,.22); color: #93a4bd; font-size: 13px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
 
-.quotedTweet { margin: 16px 0 8px; padding: 14px; border: 1px solid rgba(96,165,250,.28); border-left: 4px solid #60a5fa; border-radius: 12px; background: rgba(15,23,42,.72); }
-.quoteBadge { display: inline-flex; margin-bottom: 8px; padding: 2px 8px; border-radius: 999px; color: #bfdbfe; background: rgba(37,99,235,.22); font-size: 12px; font-weight: 750; letter-spacing: .02em; }
+.hasQuotedTweet { position: relative; }
+.hasQuotedTweet::before { content: "QUOTE"; display: inline-flex; margin-bottom: 10px; padding: 3px 9px; border-radius: 999px; color: #fde68a; background: rgba(180,83,9,.24); border: 1px solid rgba(251,191,36,.28); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.quoteDivider { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; color: #93c5fd; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.quoteDivider::before, .quoteDivider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(96,165,250,.55), transparent); }
+.quotedTweet { margin: 10px 0 8px; padding: 16px; border: 1px solid rgba(96,165,250,.44); border-left: 6px solid #60a5fa; border-radius: 14px; background: linear-gradient(180deg, rgba(30,64,175,.22), rgba(15,23,42,.82)); box-shadow: inset 0 0 0 1px rgba(191,219,254,.04); }
+.quoteBadge { display: inline-flex; margin-bottom: 10px; padding: 3px 10px; border-radius: 999px; color: #dbeafe; background: rgba(37,99,235,.38); border: 1px solid rgba(147,197,253,.30); font-size: 12px; font-weight: 850; letter-spacing: .04em; }
 .quoteTop { margin-bottom: 8px; font-size: 14px; color: #94a3b8; }
 .quoteText { color: #dbeafe; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.45; }
 .quotedTweet .mediaGrid { margin-top: 12px; }
