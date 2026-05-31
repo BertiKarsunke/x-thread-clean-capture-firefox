@@ -194,10 +194,16 @@ function articleToTweet(article) {
   const time = article.querySelector('time')?.getAttribute('datetime') || '';
   const textNodes = allTextNodes.filter((node) => !quoteRoot?.contains(node));
   const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
-  const media = extractTweetMedia(article, quoteRoot);
-  const quotedTweet = extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, textNodes);
+  const mediaSplit = splitTweetMedia(article, quoteRoot, allTextNodes);
+  let quotedTweet = extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, textNodes);
+  if (quotedTweet && mediaSplit.original.length) {
+    quotedTweet = {
+      ...quotedTweet,
+      media: cleanMediaItems(mergeMedia(mediaSplit.original, quotedTweet.media || [])).map((item) => ({ ...item, owner: 'original' }))
+    };
+  }
   const quoteMediaUrls = new Set((quotedTweet?.media || []).map((item) => item.url));
-  const mainMedia = quoteMediaUrls.size ? media.filter((item) => !quoteMediaUrls.has(item.url)) : media;
+  const mainMedia = cleanMediaItems(quoteMediaUrls.size ? mediaSplit.main.filter((item) => !quoteMediaUrls.has(item.url)) : mediaSplit.main);
   if (!text && !statusId && !mainMedia.length && !quotedTweet) return null;
 
   const rect = article.getBoundingClientRect();
@@ -221,21 +227,56 @@ function extractTweetMedia(article, excludeRoot = null) {
   const seen = new Set();
   return nodes
     .filter((img) => !excludeRoot?.contains(img))
-    .map((img) => {
-      const src = img.currentSrc || img.src || img.getAttribute('src') || firstSrcFromSrcset(img.getAttribute('srcset')) || '';
-      const url = normalizeMediaUrl(src);
-      if (!url || seen.has(url)) return null;
-      seen.add(url);
-      const rect = img.getBoundingClientRect();
-      return {
-        type: 'image',
-        url,
-        alt: img.getAttribute('alt') || '',
-        width: Math.round(rect.width || img.naturalWidth || 0),
-        height: Math.round(rect.height || img.naturalHeight || 0)
-      };
-    })
+    .map((img) => imageToMediaItem(img, seen))
     .filter(Boolean);
+}
+
+function extractAllTweetMedia(article) {
+  const nodes = [
+    ...article.querySelectorAll('[data-testid="tweetPhoto"] img, a[href*="/photo/"] img, img[src*="pbs.twimg.com/media/"], img[srcset*="pbs.twimg.com/media/"]')
+  ];
+  const seen = new Set();
+  return nodes.map((img) => imageToMediaItem(img, seen)).filter(Boolean);
+}
+
+function imageToMediaItem(img, seen) {
+  const src = img.currentSrc || img.src || img.getAttribute('src') || firstSrcFromSrcset(img.getAttribute('srcset')) || '';
+  const url = normalizeMediaUrl(src);
+  if (!url || seen.has(url)) return null;
+  seen.add(url);
+  const rect = img.getBoundingClientRect();
+  return {
+    type: 'image',
+    url,
+    alt: img.getAttribute('alt') || '',
+    width: Math.round(rect.width || img.naturalWidth || 0),
+    height: Math.round(rect.height || img.naturalHeight || 0),
+    _top: rect.top,
+    _bottom: rect.bottom
+  };
+}
+
+function splitTweetMedia(article, quoteRoot, allTextNodes) {
+  const allMedia = extractAllTweetMedia(article);
+  if (!quoteRoot && allTextNodes.length <= 1) return { main: allMedia, original: [] };
+
+  const quoteTextNode = quoteRoot?.querySelector?.('[data-testid="tweetText"]') || allTextNodes[1] || null;
+  const boundary = quoteTextNode?.getBoundingClientRect().top ?? quoteRoot?.getBoundingClientRect?.().top ?? null;
+  if (boundary == null) {
+    return {
+      main: quoteRoot ? extractTweetMedia(article, quoteRoot) : allMedia,
+      original: quoteRoot ? extractTweetMedia(quoteRoot) : []
+    };
+  }
+
+  const original = allMedia.filter((item) => item._top >= boundary - 3);
+  const originalUrls = new Set(original.map((item) => item.url));
+  const main = allMedia.filter((item) => item._bottom <= boundary - 3 && !originalUrls.has(item.url));
+  return { main, original };
+}
+
+function cleanMediaItems(items) {
+  return items.map(({ _top, _bottom, ...item }) => item);
 }
 function findQuotedTweetRoot(article) {
   const mainTime = article.querySelector(':scope time');
@@ -288,7 +329,7 @@ function extractQuotedTweet(root) {
     authorName,
     handle,
     text: text || '[text unavailable]',
-    media: media.map((item) => ({ ...item, owner: 'original' }))
+    media: cleanMediaItems(media).map((item) => ({ ...item, owner: 'original' }))
   };
 }
 
@@ -336,7 +377,7 @@ function extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, mainTex
     authorName,
     handle,
     text,
-    media: media.map((item) => ({ ...item, owner: 'original' })),
+    media: cleanMediaItems(media).map((item) => ({ ...item, owner: 'original' })),
     fallback: true
   };
 }
