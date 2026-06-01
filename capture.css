@@ -34,7 +34,7 @@ button:hover { background: linear-gradient(180deg, #3b82f6, #2563eb); }
 .sectionLabel { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid rgba(148,163,184,.22); color: #93a4bd; font-size: 13px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
 
 .hasQuotedTweet { position: relative; }
-.hasQuotedTweet::before { content: "QUOTE"; display: inline-flex; margin-bottom: 10px; padding: 3px 9px; border-radius: 999px; color: #fde68a; background: rgba(180,83,9,.24); border: 1px solid rgba(251,191,36,.28); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.hasQuotedTweet::before { content: "QUOTE TWEET · 인용 작성글"; display: inline-flex; margin-bottom: 10px; padding: 3px 9px; border-radius: 999px; color: #fde68a; background: rgba(180,83,9,.24); border: 1px solid rgba(251,191,36,.28); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
 .quoteDivider { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; color: #93c5fd; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .quoteDivider::before, .quoteDivider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(96,165,250,.55), transparent); }
 .quotedTweet { margin: 10px 0 8px; padding: 16px; border: 1px solid rgba(96,165,250,.44); border-left: 6px solid #60a5fa; border-radius: 14px; background: linear-gradient(180deg, rgba(30,64,175,.22), rgba(15,23,42,.82)); box-shadow: inset 0 0 0 1px rgba(191,219,254,.04); }
@@ -42,6 +42,16 @@ button:hover { background: linear-gradient(180deg, #3b82f6, #2563eb); }
 .quoteTop { margin-bottom: 8px; font-size: 14px; color: #94a3b8; }
 .quoteText { color: #dbeafe; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.45; }
 .quotedTweet .mediaGrid { margin-top: 12px; }
+
+.linkBlock { margin: 12px 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed rgba(125,211,252,.36); background: rgba(8,47,73,.25); }
+.linkBadge { display: inline-flex; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px; color: #bae6fd; background: rgba(14,116,144,.28); border: 1px solid rgba(103,232,249,.25); font-size: 11px; font-weight: 850; letter-spacing: .05em; }
+.tweetLink { display: grid; gap: 2px; color: #e0f2fe; font-size: 13px; overflow-wrap: anywhere; }
+.tweetLink + .tweetLink { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(125,211,252,.16); }
+.tweetLink a, .sourceLink a { color: #7dd3fc; text-decoration: none; overflow-wrap: anywhere; }
+.linkText { color: #f0f9ff; font-weight: 650; }
+.shortLink { color: #94a3b8; font-size: 11px; }
+.sourceLink { display: grid; gap: 3px; margin: 10px 0 4px; padding: 9px 11px; border-radius: 10px; background: rgba(30,64,175,.24); border: 1px solid rgba(96,165,250,.28); color: #bfdbfe; font-size: 12px; overflow-wrap: anywhere; }
+.sourceLink span { font-weight: 850; letter-spacing: .04em; }
 
 .mediaBlock { margin: 16px 0 8px; }
 .mediaOwnerBadge { display: inline-flex; margin: 0 0 7px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 850; letter-spacing: .05em; }

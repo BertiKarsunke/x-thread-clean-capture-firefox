@@ -89,6 +89,7 @@ function renderTweetList(root, tweets, total, group) {
         </div>
       </div>
       <div class="text">${escapeHtml(tweet.text || '')}</div>
+      ${renderLinks(tweet.links || [], tweet.quotedTweet ? 'QUOTE TWEET LINK' : 'TWEET LINK')}
       ${renderMedia(tweet.media || [], tweet.quotedTweet ? 'quote' : 'tweet')}
       ${renderQuotedTweet(tweet.quotedTweet)}
       ${tweet.time ? `<div class="meta">${escapeHtml(new Date(tweet.time).toLocaleString())}</div>` : ''}
@@ -168,8 +169,26 @@ function renderQuotedTweet(quotedTweet) {
       <div class="quoteBadge">ORIGINAL TWEET · 인용 원문</div>
       <div class="quoteTop"><span class="handle">${escapeHtml(quotedTweet.handle || '')}</span>${quotedTweet.authorName ? `<span class="authorName">${escapeHtml(quotedTweet.authorName)}</span>` : ''}</div>
       <div class="quoteText">${escapeHtml(quotedTweet.text || '')}</div>
+      ${renderLinks(quotedTweet.links || [], 'ORIGINAL TWEET LINK')}
+      ${quotedTweet.url ? `<div class="sourceLink"><span>ORIGINAL TWEET URL</span><a href="${escapeHtml(quotedTweet.url)}">${escapeHtml(quotedTweet.url)}</a></div>` : ''}
       ${renderMedia(quotedTweet.media || [], 'original')}
     </aside>
+  `;
+}
+
+function renderLinks(links, label = 'LINK') {
+  if (!links?.length) return '';
+  return `
+    <div class="linkBlock">
+      <div class="linkBadge">${escapeHtml(label)}</div>
+      ${links.map((link) => `
+        <div class="tweetLink">
+          <span class="linkText">${escapeHtml(link.text || link.url)}</span>
+          <a href="${escapeHtml(link.url)}">${escapeHtml(link.url)}</a>
+          ${link.shortUrl ? `<span class="shortLink">t.co: ${escapeHtml(link.shortUrl)}</span>` : ''}
+        </div>
+      `).join('')}
+    </div>
   `;
 }
 
@@ -212,10 +231,11 @@ async function copyThreadText() {
   if (!latestThread?.tweets?.length) return;
   const visibleTweets = getVisibleTweets();
   const text = visibleTweets.map((tweet, index) => {
+    const linksText = formatLinksForCopy(tweet.links || [], 'QUOTE TWEET LINK');
     const quoteText = tweet.quotedTweet
-      ? `\n\n[인용 원 트윗] ${formatIdentity(tweet.quotedTweet.handle || '', tweet.quotedTweet.authorName || '')}\n${tweet.quotedTweet.text || ''}`
+      ? `\n\n[인용 원 트윗] ${formatIdentity(tweet.quotedTweet.handle || '', tweet.quotedTweet.authorName || '')}\n${tweet.quotedTweet.text || ''}${formatLinksForCopy(tweet.quotedTweet.links || [], 'ORIGINAL TWEET LINK')}${tweet.quotedTweet.url ? `\nORIGINAL TWEET URL: ${tweet.quotedTweet.url}` : ''}`
       : '';
-    return `${index + 1}/${visibleTweets.length} ${formatIdentity(tweet.handle || '', tweet.authorName || '')}\n${tweet.text}${quoteText}`;
+    return `${index + 1}/${visibleTweets.length} ${formatIdentity(tweet.handle || '', tweet.authorName || '')}\n${tweet.text}${linksText}${quoteText}`;
   }).join('\n\n---\n\n');
   await navigator.clipboard.writeText(text);
   statusEl.textContent = 'Thread text copied';
@@ -308,6 +328,13 @@ async function waitForImages(root) {
       setTimeout(resolve, 3000);
     });
   }));
+}
+
+function formatLinksForCopy(links, label) {
+  if (!links?.length) return '';
+  return `
+${label}:
+${links.map((link) => `- ${link.text || link.url}: ${link.url}${link.shortUrl ? ` (t.co: ${link.shortUrl})` : ''}`).join('\n')}`;
 }
 
 function buildFilename(thread) {
