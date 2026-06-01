@@ -207,7 +207,7 @@ function articleToTweet(article) {
   const text = textNodes.map(normalizeTweetText).filter(Boolean).join('\n\n');
   const links = extractTextLinks(textNodes);
   const mediaSplit = splitTweetMedia(article, quoteRoot, allTextNodes, textNodes);
-  let quotedTweet = extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, textNodes);
+  let quotedTweet = quoteRoot ? extractQuotedTweetFromArticle(article, quoteRoot, allTextNodes, textNodes) : null;
   if (quotedTweet && mediaSplit.original.length) {
     quotedTweet = {
       ...quotedTweet,
@@ -272,7 +272,7 @@ function imageToMediaItem(img, seen) {
 
 function splitTweetMedia(article, quoteRoot, allTextNodes, mainTextNodes = []) {
   const allMedia = extractAllTweetMedia(article);
-  if (!quoteRoot && allTextNodes.length <= 1) return { main: allMedia, original: [] };
+  if (!quoteRoot) return { main: allMedia, original: [] };
 
   const mainTexts = mainTextNodes.length ? mainTextNodes : (quoteRoot ? allTextNodes.filter((node) => !quoteRoot.contains(node)) : allTextNodes.slice(0, 1));
   const originalTexts = quoteRoot
@@ -331,15 +331,14 @@ function cleanMediaItems(items) {
   return items.map(({ _top, _bottom, _node, ...item }) => item);
 }
 function findQuotedTweetRoot(article, allTextNodes = [...article.querySelectorAll('[data-testid="tweetText"]')]) {
+  if (!hasQuotedTweetEvidence(article)) return null;
+
   const textRoot = findTextAnchoredQuotedTweetRoot(article, allTextNodes);
   if (textRoot) return textRoot;
 
   const mainTime = article.querySelector(':scope time');
   const mainStatusLink = mainTime?.closest('a[href*="/status/"]')?.getAttribute('href') || '';
-  const quoteStatusLinks = [...article.querySelectorAll('a[href*="/status/"]')]
-    .filter((link) => !mainTime || !link.contains(mainTime))
-    .filter((link) => link.getAttribute('href') !== mainStatusLink)
-    .filter((link) => !/\/photo\//.test(link.getAttribute('href') || ''));
+  const quoteStatusLinks = getQuotedStatusLinks(article, mainStatusLink, mainTime);
 
   const candidates = new Set();
   for (const link of quoteStatusLinks) {
@@ -351,6 +350,20 @@ function findQuotedTweetRoot(article, allTextNodes = [...article.querySelectorAl
     .filter((node) => node.getBoundingClientRect().height > 24)
     .sort((a, b) => scoreQuotedRoot(b) - scoreQuotedRoot(a) || a.getBoundingClientRect().height - b.getBoundingClientRect().height);
   return ranked[0] || null;
+}
+
+function getQuotedStatusLinks(article, mainStatusLink = '', mainTime = article.querySelector(':scope time')) {
+  return [...article.querySelectorAll('a[href*="/status/"]')]
+    .filter((link) => !mainTime || !link.contains(mainTime))
+    .filter((link) => link.getAttribute('href') !== mainStatusLink)
+    .filter((link) => !/\/photo\//.test(link.getAttribute('href') || ''))
+    .filter((link) => getStatusId(link.getAttribute('href')));
+}
+
+function hasQuotedTweetEvidence(article) {
+  const mainTime = article.querySelector(':scope time');
+  const mainStatusLink = mainTime?.closest('a[href*="/status/"]')?.getAttribute('href') || '';
+  return getQuotedStatusLinks(article, mainStatusLink, mainTime).length > 0;
 }
 
 function findTextAnchoredQuotedTweetRoot(article, allTextNodes) {
@@ -365,12 +378,13 @@ function findTextAnchoredQuotedTweetRoot(article, allTextNodes) {
     if (!parent || parent === article || parent.contains(mainText)) break;
 
     const rect = parent.getBoundingClientRect?.();
-    const hasQuoteSignals = parent.querySelector?.('a[href*="/status/"], time, [data-testid="tweetPhoto"], img[src*="pbs.twimg.com/media/"]');
-    if (rect && rect.height >= 24 && hasQuoteSignals) best = parent;
+    const hasStatusLink = parent.querySelector?.('a[href*="/status/"], time');
+    const hasCardShape = parent.matches?.('div[role="link"], div[tabindex="0"], a[role="link"]') || parent.querySelector?.('div[role="link"], div[tabindex="0"], a[role="link"]');
+    if (rect && rect.height >= 24 && hasStatusLink && hasCardShape) best = parent;
     node = parent;
   }
 
-  if (!best) return findFallbackQuotedTweetRoot(article, allTextNodes);
+  if (!best) return null;
   const clickable = best.closest('div[role="link"], div[tabindex="0"], a[role="link"]');
   if (clickable && article.contains(clickable) && !clickable.contains(mainText)) return clickable;
   return best;

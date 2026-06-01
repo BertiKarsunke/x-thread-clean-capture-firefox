@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "X Thread Clean Capture",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Capture a clean image of an X/Twitter thread without surrounding UI.",
   "browser_action": {
     "default_title": "Capture clean X thread"

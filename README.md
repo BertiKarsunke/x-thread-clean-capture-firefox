@@ -35,7 +35,7 @@ X는 동적 앱이라 긴 thread를 한 번에 모두 로드하지 않습니다.
 
 ## 패키지
 
-`dist/x-thread-clean-capture-firefox-v1.0.12.zip` 파일은 `manifest.json`이 archive root에 오도록 만든 Firefox WebExtension ZIP입니다.
+`dist/x-thread-clean-capture-firefox-v1.0.13.zip` 파일은 `manifest.json`이 archive root에 오도록 만든 Firefox WebExtension ZIP입니다.
 
 ## 권한
 
@@ -50,3 +50,5 @@ MIT
 
 - v1.0.10: quote tweet image와 ORIGINAL TWEET image에 각각 별도 배지/캡션/테두리를 붙이고, URL 중복 media는 main quote 영역에서 제거합니다.
 - v1.0.11: quote/original image를 tweetText 위치 기준으로 재분류해서 original 영역 때문에 quote tweet image가 누락되는 문제를 수정합니다.
+
+- v1.0.13: quote가 아닌 일반 tweet에서 두 개 이상의 tweetText가 있어도 ORIGINAL TWEET 카드로 오인하지 않도록, 별도 status link가 있는 경우에만 인용 원문을 생성합니다.
