@@ -31,6 +31,7 @@
         "https://www.x.com/*"
       ],
       "js": [
+        "thread-extractor.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -39,12 +40,18 @@
   "web_accessible_resources": [
     "capture.html",
     "capture.js",
-    "capture.css"
+    "capture.css",
+    "thread-extractor.js"
   ],
   "browser_specific_settings": {
     "gecko": {
       "id": "x-thread-clean-capture@szyi.local",
-      "strict_min_version": "109.0"
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      },
+      "strict_min_version": "142.0"
     }
   }
 }

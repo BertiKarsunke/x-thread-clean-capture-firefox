@@ -10,9 +10,37 @@
   <main>
     <section id="toolbar">
       <strong>X Thread Capture</strong>
-      <button id="download">Download PNG</button>
-      <button id="copyText">Copy text</button>
-      <button id="toggleAdditional" hidden>추가 thread 보이기</button>
+      <div class="toolbarGroup">
+        <button id="download">Download PNG</button>
+        <button id="copyImage">Copy image</button>
+        <button id="copyText">Copy text</button>
+        <button id="copyMarkdown">Copy markdown</button>
+        <button id="openSource">Open source</button>
+      </div>
+      <div class="toolbarGroup settingsGroup">
+        <label>Theme
+          <select id="theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <label>Width
+          <select id="widthPreset">
+            <option value="compact">Compact</option>
+            <option value="standard">Standard</option>
+            <option value="wide">Wide</option>
+          </select>
+        </label>
+        <label>Text
+          <input id="fontScale" type="range" min="90" max="120" step="5" value="100" />
+        </label>
+        <label><input id="showMetadata" type="checkbox" /> Metadata</label>
+        <label><input id="showWatermark" type="checkbox" /> Watermark</label>
+      </div>
+      <div class="toolbarGroup">
+        <button id="resetHidden">Reset hidden</button>
+        <button id="toggleAdditional" hidden>추가 thread 보이기</button>
+      </div>
       <span id="status"></span>
     </section>
     <section id="capture" aria-live="polite"></section>

@@ -1,18 +1,47 @@
 const captureEl = document.getElementById('capture');
 const statusEl = document.getElementById('status');
-const EXPORT_BACKGROUND = '#0b1020';
+const DEFAULT_SETTINGS = {
+  theme: 'dark',
+  widthPreset: 'standard',
+  fontScale: 100,
+  showMetadata: true,
+  showWatermark: false
+};
+const WIDTH_PRESETS = {
+  compact: 640,
+  standard: 760,
+  wide: 960
+};
+const EXPORT_BACKGROUNDS = {
+  dark: '#0b1020',
+  light: '#f8fafc'
+};
 let latestThread = null;
 let showAdditional = false;
+let captureSettings = { ...DEFAULT_SETTINGS };
 const hiddenTweetKeys = new Set();
 
 init();
 
 document.getElementById('download').addEventListener('click', downloadPng);
+document.getElementById('copyImage').addEventListener('click', copyThreadImage);
 document.getElementById('copyText').addEventListener('click', copyThreadText);
+document.getElementById('copyMarkdown').addEventListener('click', copyThreadMarkdown);
+document.getElementById('openSource').addEventListener('click', openSourceUrl);
+document.getElementById('resetHidden').addEventListener('click', resetHiddenTweets);
 const toggleAdditionalButton = document.getElementById('toggleAdditional');
 if (toggleAdditionalButton) toggleAdditionalButton.addEventListener('click', toggleAdditionalThread);
+const settingInputs = {
+  theme: document.getElementById('theme'),
+  widthPreset: document.getElementById('widthPreset'),
+  fontScale: document.getElementById('fontScale'),
+  showMetadata: document.getElementById('showMetadata'),
+  showWatermark: document.getElementById('showWatermark')
+};
+Object.values(settingInputs).forEach((input) => input.addEventListener('change', updateCaptureSettings));
 
 async function init() {
+  await loadSettings();
   const response = await browser.runtime.sendMessage({ type: 'X_THREAD_CAPTURE_GET' });
   if (!response?.ok || !response.thread) {
     renderError('No captured thread found. Go to an X/Twitter status page and click the extension icon.');
@@ -31,11 +60,62 @@ async function init() {
   updateStatus(getVisibleMediaCount());
 }
 
+async function loadSettings() {
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'X_THREAD_CAPTURE_GET_SETTINGS' });
+    captureSettings = normalizeSettings(response?.settings);
+  } catch {
+    captureSettings = { ...DEFAULT_SETTINGS };
+  }
+  syncSettingsControls();
+  applyCaptureSettings();
+}
+
+function normalizeSettings(settings) {
+  const next = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  if (!WIDTH_PRESETS[next.widthPreset]) next.widthPreset = DEFAULT_SETTINGS.widthPreset;
+  if (!EXPORT_BACKGROUNDS[next.theme]) next.theme = DEFAULT_SETTINGS.theme;
+  next.fontScale = Math.min(120, Math.max(90, Number(next.fontScale) || DEFAULT_SETTINGS.fontScale));
+  next.showMetadata = Boolean(next.showMetadata);
+  next.showWatermark = Boolean(next.showWatermark);
+  return next;
+}
+
+function syncSettingsControls() {
+  settingInputs.theme.value = captureSettings.theme;
+  settingInputs.widthPreset.value = captureSettings.widthPreset;
+  settingInputs.fontScale.value = String(captureSettings.fontScale);
+  settingInputs.showMetadata.checked = captureSettings.showMetadata;
+  settingInputs.showWatermark.checked = captureSettings.showWatermark;
+}
+
+async function updateCaptureSettings() {
+  captureSettings = normalizeSettings({
+    theme: settingInputs.theme.value,
+    widthPreset: settingInputs.widthPreset.value,
+    fontScale: settingInputs.fontScale.value,
+    showMetadata: settingInputs.showMetadata.checked,
+    showWatermark: settingInputs.showWatermark.checked
+  });
+  applyCaptureSettings();
+  renderThread(latestThread);
+  updateStatus(getVisibleMediaCount());
+  await browser.runtime.sendMessage({ type: 'X_THREAD_CAPTURE_SAVE_SETTINGS', settings: captureSettings });
+}
+
+function applyCaptureSettings() {
+  captureEl.classList.toggle('themeLight', captureSettings.theme === 'light');
+  captureEl.classList.toggle('hideMetadata', !captureSettings.showMetadata);
+  captureEl.style.setProperty('--capture-width', `${WIDTH_PRESETS[captureSettings.widthPreset]}px`);
+  captureEl.style.setProperty('--capture-font-scale', `${captureSettings.fontScale}%`);
+}
+
 async function hydrateTweetMedia(thread) {
   const items = getAllMedia(thread);
   if (!items.length) return;
 
   statusEl.textContent = `Loading ${items.length} image(s)...`;
+  let failures = 0;
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
     try {
@@ -45,18 +125,25 @@ async function hydrateTweetMedia(thread) {
       statusEl.textContent = `Loaded ${i + 1}/${items.length} image(s)...`;
     } catch (error) {
       item.error = error.message;
+      failures += 1;
     }
   }
+  if (thread.collectionMeta) thread.collectionMeta.mediaFetchFailures = failures;
 }
 
 function renderThread(thread) {
+  if (!thread) return;
+  applyCaptureSettings();
   const root = document.createElement('div');
   const header = document.createElement('header');
   header.className = 'header';
-  header.innerHTML = `
-    <div class="meta">${escapeHtml(formatIdentity(thread.authorHandle || '', thread.authorName || ''))} · ${escapeHtml(thread.sourceUrl || '')}</div>
-    <div class="meta">Captured ${escapeHtml(new Date(thread.capturedAt).toLocaleString())}</div>
-  `;
+  const identityMeta = document.createElement('div');
+  identityMeta.className = 'meta';
+  identityMeta.textContent = `${formatIdentity(thread.authorHandle || '', thread.authorName || '')} · ${thread.sourceUrl || ''}`;
+  const capturedMeta = document.createElement('div');
+  capturedMeta.className = 'meta';
+  capturedMeta.textContent = `Captured ${new Date(thread.capturedAt).toLocaleString()}`;
+  header.replaceChildren(identityMeta, capturedMeta);
   root.append(header);
 
   renderTweetList(root, thread.tweets || [], thread.tweets?.length || 0, 'main');
@@ -65,9 +152,19 @@ function renderThread(thread) {
   if (additionalTweets.length) {
     const section = document.createElement('section');
     section.className = `additionalThread${showAdditional ? '' : ' hidden'}`;
-    section.innerHTML = `<div class="sectionLabel">Additional thread / replies</div>`;
+    const sectionLabel = document.createElement('div');
+    sectionLabel.className = 'sectionLabel';
+    sectionLabel.textContent = 'Additional thread / replies';
+    section.append(sectionLabel);
     renderTweetList(section, additionalTweets, additionalTweets.length, 'additional');
     root.append(section);
+  }
+
+  if (captureSettings.showWatermark) {
+    const watermark = document.createElement('div');
+    watermark.className = 'watermark';
+    watermark.textContent = 'Captured with X Thread Clean Capture';
+    root.append(watermark);
   }
 
   captureEl.replaceChildren(root);
@@ -80,9 +177,9 @@ function renderTweetList(root, tweets, total, group) {
     const article = document.createElement('article');
     article.className = `tweet${tweet.quotedTweet ? ' hasQuotedTweet' : ''}${hiddenTweetKeys.has(key) ? ' hiddenTweet' : ''}`;
     article.dataset.tweetKey = key;
-    article.innerHTML = `
+    article.replaceChildren(...htmlFragment(`
       <div class="tweetTop">
-        <div><span class="handle">${escapeHtml(tweet.handle || '')}</span>${tweet.authorName ? `<span class="authorName">${escapeHtml(tweet.authorName)}</span>` : ''}</div>
+        ${renderAuthorIdentity(tweet.handle || '', tweet.authorName || '')}
         <div class="tweetControls">
           <span class="index">${tweet.index}/${total}</span>
           <button class="tweetVisibility" type="button" data-tweet-key="${escapeHtml(key)}">${hiddenTweetKeys.has(key) ? '노출' : '비노출'}</button>
@@ -93,7 +190,7 @@ function renderTweetList(root, tweets, total, group) {
       ${renderMedia(tweet.media || [], tweet.quotedTweet ? 'quote' : 'tweet')}
       ${renderQuotedTweet(tweet.quotedTweet)}
       ${tweet.time ? `<div class="meta">${escapeHtml(new Date(tweet.time).toLocaleString())}</div>` : ''}
-    `;
+    `));
     root.append(article);
   }
 }
@@ -129,7 +226,9 @@ function getVisibleMediaCount() {
 function updateStatus(mediaCount) {
   const visibleCount = getVisibleTweets().length;
   const hiddenCount = hiddenTweetKeys.size;
-  statusEl.textContent = `${visibleCount} tweet(s), ${mediaCount} image(s) ready${hiddenCount ? ` · ${hiddenCount} hidden` : ''}`;
+  const meta = latestThread?.collectionMeta;
+  const stop = meta ? ` · collected ${meta.collectedTweetCount} in ${meta.scrollPasses} pass(es)` : '';
+  statusEl.textContent = `${visibleCount} tweet(s), ${mediaCount} image(s) ready${hiddenCount ? ` · ${hiddenCount} hidden` : ''}${stop}`;
 }
 
 function getAllTweets(thread) {
@@ -157,8 +256,13 @@ function getTweetKey(tweet, group) {
 }
 
 function formatIdentity(handle, name) {
-  if (handle && name) return `${handle} (${name})`;
-  return handle || name || 'Unknown author';
+  if (handle && name) return `${name} ${handle}`;
+  return name || handle || 'Unknown author';
+}
+
+function renderAuthorIdentity(handle, name) {
+  const separator = name && handle ? ' ' : '';
+  return `<div class="tweetAuthor">${name ? `<span class="authorName">${escapeHtml(name)}</span>` : ''}${separator}${handle ? `<span class="handle">${escapeHtml(handle)}</span>` : ''}</div>`;
 }
 
 function renderQuotedTweet(quotedTweet) {
@@ -167,7 +271,7 @@ function renderQuotedTweet(quotedTweet) {
     <div class="quoteDivider"><span>아래는 인용된 ORIGINAL TWEET</span></div>
     <aside class="quotedTweet" aria-label="인용된 original tweet">
       <div class="quoteBadge">ORIGINAL TWEET · 인용 원문</div>
-      <div class="quoteTop"><span class="handle">${escapeHtml(quotedTweet.handle || '')}</span>${quotedTweet.authorName ? `<span class="authorName">${escapeHtml(quotedTweet.authorName)}</span>` : ''}</div>
+      <div class="quoteTop">${renderAuthorIdentity(quotedTweet.handle || '', quotedTweet.authorName || '')}</div>
       <div class="quoteText">${escapeHtml(quotedTweet.text || '')}</div>
       ${renderLinks(quotedTweet.links || [], 'ORIGINAL TWEET LINK')}
       ${quotedTweet.url ? `<div class="sourceLink"><span>ORIGINAL TWEET URL</span><a href="${escapeHtml(quotedTweet.url)}">${escapeHtml(quotedTweet.url)}</a></div>` : ''}
@@ -199,10 +303,9 @@ function renderMedia(media, owner = 'tweet') {
   const className = owner === 'original' ? 'originalMedia' : owner === 'quote' ? 'quoteMedia' : 'tweetMedia';
   return `
     <div class="mediaBlock ${className}">
-      <div class="mediaOwnerBadge">${escapeHtml(label)}</div>
-      <div class="mediaGrid mediaCount${Math.min(images.length, 4)}">
+      <div class="mediaStack">
         ${images.map((item) => item.dataUrl
-          ? `<figure class="mediaFigure"><img class="tweetImage" src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.alt || 'tweet image')}" /><figcaption>${escapeHtml(label)}</figcaption></figure>`
+          ? `<figure class="mediaFigure"><img class="tweetImage" src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.alt || 'tweet image')}" /></figure>`
           : `<div class="mediaError">${escapeHtml(label)} unavailable${item.error ? `: ${escapeHtml(item.error)}` : ''}</div>`).join('')}
       </div>
     </div>
@@ -210,8 +313,16 @@ function renderMedia(media, owner = 'tweet') {
 }
 
 function renderError(message) {
-  captureEl.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+  const error = document.createElement('p');
+  error.className = 'error';
+  error.textContent = message;
+  captureEl.replaceChildren(error);
   statusEl.textContent = 'Error';
+}
+
+function htmlFragment(markup) {
+  const parsed = new DOMParser().parseFromString(markup, 'text/html');
+  return [...parsed.body.childNodes].map((node) => document.importNode(node, true));
 }
 
 async function downloadPng() {
@@ -222,6 +333,21 @@ async function downloadPng() {
     const name = buildFilename(latestThread);
     saveBlob(blob, name);
     statusEl.textContent = 'Download started';
+  } catch (error) {
+    statusEl.textContent = error.message;
+  }
+}
+
+async function copyThreadImage() {
+  try {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+      throw new Error('Image clipboard is unavailable in this Firefox context. Use Download PNG.');
+    }
+    statusEl.textContent = 'Rendering image for clipboard...';
+    await waitForImages(captureEl);
+    const blob = await elementToPngBlob(captureEl);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    statusEl.textContent = 'Thread image copied';
   } catch (error) {
     statusEl.textContent = error.message;
   }
@@ -241,6 +367,30 @@ async function copyThreadText() {
   statusEl.textContent = 'Thread text copied';
 }
 
+async function copyThreadMarkdown() {
+  if (!latestThread?.tweets?.length) return;
+  const visibleTweets = getVisibleTweets();
+  const markdown = visibleTweets.map((tweet, index) => {
+    const links = markdownLinks(tweet.links || []);
+    const media = markdownMedia(tweet.media || []);
+    const quote = tweet.quotedTweet ? markdownQuotedTweet(tweet.quotedTweet) : '';
+    return `### ${index + 1}/${visibleTweets.length} ${formatIdentity(tweet.handle || '', tweet.authorName || '')}\n\n${tweet.text || ''}${links}${media}${quote}`;
+  }).join('\n\n---\n\n');
+  await navigator.clipboard.writeText(markdown);
+  statusEl.textContent = 'Thread markdown copied';
+}
+
+function openSourceUrl() {
+  if (!latestThread?.sourceUrl) return;
+  window.open(latestThread.sourceUrl, '_blank', 'noopener');
+}
+
+function resetHiddenTweets() {
+  hiddenTweetKeys.clear();
+  renderThread(latestThread);
+  updateStatus(getVisibleMediaCount());
+}
+
 async function elementToPngBlob(element) {
   await document.fonts.ready;
   await waitForImages(element);
@@ -256,7 +406,7 @@ async function elementToPngBlob(element) {
   clone.style.margin = '0';
   clone.style.boxShadow = 'none';
   clone.style.borderRadius = '14px';
-  clone.style.background = EXPORT_BACKGROUND;
+  clone.style.background = EXPORT_BACKGROUNDS[captureSettings.theme];
 
   const css = [...document.styleSheets]
     .map((sheet) => {
@@ -268,9 +418,9 @@ async function elementToPngBlob(element) {
   const xhtml = new XMLSerializer().serializeToString(clone);
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-      <rect width="100%" height="100%" fill="${EXPORT_BACKGROUND}" />
+      <rect width="100%" height="100%" fill="${EXPORT_BACKGROUNDS[captureSettings.theme]}" />
       <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px; min-height:${height}px; background:${EXPORT_BACKGROUND};">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px; min-height:${height}px; background:${EXPORT_BACKGROUNDS[captureSettings.theme]};">
           <style>${css}</style>${xhtml}
         </div>
       </foreignObject>
@@ -288,7 +438,7 @@ async function elementToPngBlob(element) {
     canvas.width = Math.ceil(width * scale);
     canvas.height = Math.ceil(height * scale);
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = EXPORT_BACKGROUND;
+    ctx.fillStyle = EXPORT_BACKGROUNDS[captureSettings.theme];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale);
     ctx.drawImage(img, 0, 0);
@@ -337,10 +487,33 @@ ${label}:
 ${links.map((link) => `- ${link.text || link.url}: ${link.url}${link.shortUrl ? ` (t.co: ${link.shortUrl})` : ''}`).join('\n')}`;
 }
 
+function markdownLinks(links) {
+  if (!links?.length) return '';
+  return `\n\n${links.map((link) => `- [${escapeMarkdown(link.text || link.url)}](${link.url})`).join('\n')}`;
+}
+
+function markdownMedia(media) {
+  const images = media.filter((item) => item.type === 'image');
+  if (!images.length) return '';
+  return `\n\n${images.map((item) => `![${escapeMarkdown(item.alt || 'tweet image')}](${item.url})`).join('\n')}`;
+}
+
+function markdownQuotedTweet(quotedTweet) {
+  const links = markdownLinks(quotedTweet.links || []);
+  const media = markdownMedia(quotedTweet.media || []);
+  const source = quotedTweet.url ? `\n\nOriginal: ${quotedTweet.url}` : '';
+  return `\n\n> ${formatIdentity(quotedTweet.handle || '', quotedTweet.authorName || '')}\n>\n> ${(quotedTweet.text || '').replace(/\n/g, '\n> ')}${links}${media}${source}`;
+}
+
+function escapeMarkdown(value) {
+  return String(value).replaceAll('[', '\\[').replaceAll(']', '\\]');
+}
+
 function buildFilename(thread) {
   const id = thread?.rootStatusId || 'thread';
   const handle = (thread?.authorHandle || 'x').replace(/[^a-zA-Z0-9_-]/g, '');
-  return `x-thread-${handle}-${id}.png`;
+  const date = new Date(thread?.capturedAt || Date.now()).toISOString().slice(0, 10).replaceAll('-', '');
+  return `x-thread-${handle}-${id}-${date}.png`;
 }
 
 function escapeHtml(value) {

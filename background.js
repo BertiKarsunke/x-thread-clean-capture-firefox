@@ -1,4 +1,5 @@
 const CAPTURE_KEY = 'latestThreadCapture';
+const SETTINGS_KEY = 'captureSettings';
 const ALLOWED_IMAGE_HOSTS = new Set(['pbs.twimg.com']);
 
 browser.browserAction.onClicked.addListener(async (tab) => {
@@ -8,14 +9,14 @@ browser.browserAction.onClicked.addListener(async (tab) => {
   }
 
   try {
-    await ensureContentScript(tab.id);
-    const response = await browser.tabs.sendMessage(tab.id, { type: 'X_THREAD_CAPTURE_COLLECT' });
+    await runStage('ensureContentScript', () => ensureContentScript(tab.id));
+    const response = await runStage('collectThread', () => browser.tabs.sendMessage(tab.id, { type: 'X_THREAD_CAPTURE_COLLECT' }));
     if (!response?.ok) throw new Error(response?.error || 'Could not collect the thread.');
 
-    await browser.storage.local.set({ [CAPTURE_KEY]: response.thread });
-    await browser.tabs.create({ url: browser.runtime.getURL('capture.html') });
+    await runStage('storeCapture', () => browser.storage.local.set({ [CAPTURE_KEY]: response.thread }));
+    await runStage('openCapturePage', () => browser.tabs.create({ url: browser.runtime.getURL('capture.html') }));
   } catch (error) {
-    await openErrorPage(error.message);
+    await openErrorPage(describeError(error));
   }
 });
 
@@ -32,23 +33,78 @@ browser.runtime.onMessage.addListener((message) => {
       .catch((error) => ({ ok: false, error: error.message }));
   }
 
+  if (message?.type === 'X_THREAD_CAPTURE_GET_SETTINGS') {
+    return browser.storage.local.get(SETTINGS_KEY)
+      .then((data) => ({ ok: true, settings: data[SETTINGS_KEY] || null }))
+      .catch((error) => ({ ok: false, error: error.message }));
+  }
+
+  if (message?.type === 'X_THREAD_CAPTURE_SAVE_SETTINGS') {
+    return browser.storage.local.set({ [SETTINGS_KEY]: message.settings || {} })
+      .then(() => ({ ok: true }))
+      .catch((error) => ({ ok: false, error: error.message }));
+  }
+
   return false;
 });
 
 function isXStatusUrl(url) {
   try {
     const u = new URL(url);
-    return ['x.com', 'twitter.com', 'www.x.com', 'www.twitter.com'].includes(u.hostname) && /\/status\/\d+/.test(u.pathname);
+    return ['x.com', 'twitter.com', 'www.x.com', 'www.twitter.com'].includes(u.hostname) && /^\/[^/]+\/status\/\d+\/?$/.test(u.pathname);
   } catch {
     return false;
   }
 }
 
-async function ensureContentScript(tabId) {
+function describeError(error) {
+  const message = error?.message || String(error);
+  const hasLocation = error?.fileName && error.fileName !== 'undefined';
+  const location = hasLocation ? ` (${error.fileName}${error.lineNumber ? `:${error.lineNumber}` : ''})` : '';
+  if (location) return `${message}${location}`;
+  const details = serializeErrorDetails(error);
+  return details ? `${message} ${details}` : message;
+}
+
+async function runStage(stage, task) {
   try {
-    await browser.tabs.sendMessage(tabId, { type: 'X_THREAD_CAPTURE_PING' });
+    return await task();
+  } catch (error) {
+    if (!error.stage) error.stage = stage;
+    throw error;
+  }
+}
+
+function serializeErrorDetails(error) {
+  if (!error || typeof error !== 'object') return '';
+  const details = {};
+  for (const key of Object.keys(error)) {
+    if (error[key] !== undefined) details[key] = error[key];
+  }
+  return Object.keys(details).length ? JSON.stringify(details) : '';
+}
+
+async function ensureContentScript(tabId) {
+  let response;
+  try {
+    response = await runStage('pingContentScript', () => browser.tabs.sendMessage(tabId, { type: 'X_THREAD_CAPTURE_PING' }));
   } catch {
-    await browser.tabs.executeScript(tabId, { file: 'content.js' });
+    await tryInjectExtractor(tabId);
+    await runStage('injectContentScript', () => browser.tabs.executeScript(tabId, { file: 'content.js' }));
+    return;
+  }
+
+  if (!response?.extractorLoaded) {
+    await tryInjectExtractor(tabId);
+  }
+}
+
+async function tryInjectExtractor(tabId) {
+  try {
+    await runStage('injectExtractor', () => browser.tabs.executeScript(tabId, { file: 'thread-extractor.js' }));
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -82,4 +138,14 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    ensureContentScript,
+    describeError,
+    isXStatusUrl,
+    runStage,
+    tryInjectExtractor
+  };
 }
