@@ -4,7 +4,7 @@ const DEFAULT_SETTINGS = {
   theme: 'dark',
   widthPreset: 'standard',
   fontScale: 100,
-  showMetadata: true,
+  showMetadata: false,
   showWatermark: false
 };
 const WIDTH_PRESETS = {
@@ -13,7 +13,7 @@ const WIDTH_PRESETS = {
   wide: 960
 };
 const EXPORT_BACKGROUNDS = {
-  dark: '#0b1020',
+  dark: '#000000',
   light: '#f8fafc'
 };
 let latestThread = null;
@@ -405,7 +405,7 @@ async function elementToPngBlob(element) {
   clone.style.width = `${width}px`;
   clone.style.margin = '0';
   clone.style.boxShadow = 'none';
-  clone.style.borderRadius = '14px';
+  clone.style.borderRadius = '0';
   clone.style.background = EXPORT_BACKGROUNDS[captureSettings.theme];
 
   const css = [...document.styleSheets]
